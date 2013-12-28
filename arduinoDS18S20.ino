@@ -2,17 +2,17 @@
 #include <OneWire.h>
 #include <Time.h>
 
-#define TEMPERATURE_SENSOR_PIN  2 
+#define SENSOR_PIN  2 
 
 // on pin 10 (a 2.2K resistor is necessary)
-OneWire ds(TEMPERATURE_SENSOR_PIN);
+OneWire ds(SENSOR_PIN);
 
-void setup(void) {
+void setup() {
     Serial.begin(9600);
-    Serial.println("Initializing sensors...");
+    setTime(0, 0, 0, 1, 1, 14);
 }
 
-void loop(void) {
+void loop() {
     byte i;
     byte p = 0;
     byte data[12];
@@ -30,6 +30,9 @@ void loop(void) {
         return;
     }
 
+    printTime();
+    Serial.print(" : ");
+
     ds.reset();
     ds.select(addr);
     for ( i = 0; i < 8; i++) {
@@ -39,7 +42,7 @@ void loop(void) {
     Serial.print(": ");
     ds.write(0x44, 1);
   
-    delay(1000);
+    delay(750);
   
     p = ds.reset();
     ds.select(addr);    
@@ -58,4 +61,30 @@ void loop(void) {
     temp = (float) raw / 16.0;
     Serial.print(temp);
     Serial.println(" Celsius");
+}
+
+void printTime() {
+    int h = hour();
+    int m = minute();
+    int s = second();
+   
+    if (h < 10) {       // Add a zero, if necessary
+        Serial.print(0);
+    }
+   
+    Serial.print(h);
+    Serial.print(":");  // And print the colon
+   
+    if (m < 10) {       // Add a zero, if necessary, as above
+        Serial.print(0);
+    }
+   
+    Serial.print(m);
+    Serial.print(":");  // And print the colon
+   
+    if (s < 10) {       // Add a zero, if necessary, as above
+        Serial.print(0);
+    }
+   
+    Serial.print(s);
 }
