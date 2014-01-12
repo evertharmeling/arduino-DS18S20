@@ -47,11 +47,11 @@ void loop() {
         if (buttons & BUTTON_LEFT) {
             mode = "temp";
         }
+        
+        lcd.clear();
     }
     
-    if (mode == "temp") {
-        printTemperature();
-    } else if (mode == "time") {
+    if (mode == "time") {
         printTime();
     } else {
         printTemperature();
@@ -62,34 +62,29 @@ void printTime() {
     int s = millis() / 1000;
     int m = s / 60;
     int h = m / 60;
-    lcd.clear();
-    lcd.setCursor(0,1);
+    lcd.setCursor(8,1);
    
     if (h < 10) {       // Add a zero, if necessary
         lcd.print(0);
     }
    
     lcd.print(h);
-    lcd.print(":");  // And print the colon
+    lcd.print(":");     // And print the colon
    
     if (m < 10) {       // Add a zero, if necessary, as above
         lcd.print(0);
     }
    
     lcd.print(m);
-    lcd.print(":");  // And print the colon
+    lcd.print(":");     // And print the colon
    
+    s -= m * 60;
     if (s < 10) {       // Add a zero, if necessary, as above
         lcd.print(0);
     }
    
     lcd.print(s);
-}
-
-void printDots() {
-    lcd.print(" ");
-    delay(100);
-    lcd.cursor();
+    delay(950);
 }
 
 float readTemperature() {
@@ -99,7 +94,7 @@ float readTemperature() {
     byte addr[8];
     sensor = "";
   
-    if ( !ds.search(addr)) {
+    if (!ds.search(addr)) {
         ds.reset_search();
         delay(250);
         return 0;
@@ -115,7 +110,7 @@ float readTemperature() {
     ds.reset();
     ds.select(addr);
     for ( i = 0; i < 8; i++) {
-        sensor = sensor + String(addr[i], HEX);
+        sensor += String(addr[i], HEX);
     }
 
     ds.write(0x44, 1);  
@@ -123,7 +118,7 @@ float readTemperature() {
   
     p = ds.reset();
     ds.select(addr);    
-    ds.write(0xBE);  // Read Scratchpad
+    ds.write(0xBE);
 
     for ( i = 0; i < 9; i++) {
         data[i] = ds.read();
@@ -153,5 +148,7 @@ void printTemperature() {
     lcd.print(" ");
     lcd.print((char) 223);
     lcd.print("C");
-    printDots();
+    lcd.print(" ");
+    delay(100);
+    lcd.cursor();
 }
