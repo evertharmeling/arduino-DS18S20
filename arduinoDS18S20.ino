@@ -1,47 +1,124 @@
 // DS18S20 temperature sensor
 #include <OneWire.h>
-#include <Time.h>
+#include <Wire.h>
+#include <Adafruit_MCP23017.h>
+#include <Adafruit_RGBLCDShield.h>
 
-#define SENSOR_PIN  2 
+#define SENSOR_PIN  2
+
+#define SENSOR_HLT "10bab04c280b7"
+#define SENSOR_MLT ""              // add sensor address
+
+#define RED 0x1
+#define YELLOW 0x3
+#define GREEN 0x2
+#define TEAL 0x6
+#define BLUE 0x4
+#define VIOLET 0x5
+#define WHITE 0x7
 
 // on pin 10 (a 2.2K resistor is necessary)
 OneWire ds(SENSOR_PIN);
+Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
+
+String sensor;
+String mode;
 
 void setup() {
     Serial.begin(9600);
-    setTime(0, 0, 0, 1, 1, 14);
+    
+    // lcd
+    lcd.begin(16, 2);
+    
+    lcd.print("Welkom in");
+    lcd.setCursor(0, 1);
+    lcd.print("Brouwzaal 1");
+    delay(1000);
+    lcd.clear();
 }
 
 void loop() {
+    uint8_t buttons = lcd.readButtons();
+
+    if (buttons) {
+        if (buttons & BUTTON_UP) {
+            mode = "time";
+        }
+        if (buttons & BUTTON_LEFT) {
+            mode = "temp";
+        }
+    }
+    
+    if (mode == "temp") {
+        printTemperature();
+    } else if (mode == "time") {
+        printTime();
+    } else {
+        printTemperature();
+    }
+}
+
+void printTime() {
+    int s = millis() / 1000;
+    int m = s / 60;
+    int h = m / 60;
+    lcd.clear();
+    lcd.setCursor(0,1);
+   
+    if (h < 10) {       // Add a zero, if necessary
+        lcd.print(0);
+    }
+   
+    lcd.print(h);
+    lcd.print(":");  // And print the colon
+   
+    if (m < 10) {       // Add a zero, if necessary, as above
+        lcd.print(0);
+    }
+   
+    lcd.print(m);
+    lcd.print(":");  // And print the colon
+   
+    if (s < 10) {       // Add a zero, if necessary, as above
+        lcd.print(0);
+    }
+   
+    lcd.print(s);
+}
+
+void printDots() {
+    lcd.print(" ");
+    delay(100);
+    lcd.cursor();
+}
+
+float readTemperature() {
     byte i;
     byte p = 0;
     byte data[12];
     byte addr[8];
-    float temp;
+    sensor = "";
   
     if ( !ds.search(addr)) {
         ds.reset_search();
         delay(250);
-        return;
+        return 0;
     }
 
     if (OneWire::crc8(addr, 7) != addr[7]) {
-        Serial.println("CRC is not valid!");
-        return;
+        lcd.setCursor(0, 0);
+        lcd.setBacklight(RED);
+        lcd.println("CRC is not valid!");
+        return 0;
     }
-
-    printTime();
-    Serial.print(" : ");
 
     ds.reset();
     ds.select(addr);
     for ( i = 0; i < 8; i++) {
-        Serial.print(addr[i], HEX);
-        Serial.print(" ");
+        sensor = sensor + String(addr[i], HEX);
     }
-    Serial.print(": ");
-    ds.write(0x44, 1);
-  
+
+    ds.write(0x44, 1);  
     delay(750);
   
     p = ds.reset();
@@ -56,35 +133,25 @@ void loop() {
     raw = raw << 3;
     if (data[7] == 0x10) {
         raw = (raw & 0xFFF0) + 12 - data[6];
-    }
-  
-    temp = (float) raw / 16.0;
-    Serial.print(temp);
-    Serial.println(" Celsius");
+    } 
+    
+    return (float) raw / 16.0;
 }
 
-void printTime() {
-    int h = hour();
-    int m = minute();
-    int s = second();
-   
-    if (h < 10) {       // Add a zero, if necessary
-        Serial.print(0);
+void printTemperature() {
+    float temp = readTemperature();
+  
+    if (sensor == SENSOR_HLT) {
+        lcd.setCursor(0,0);
+        lcd.print("HLT: ");
+    } else if (sensor == SENSOR_MLT) {
+        lcd.setCursor(0,1);
+        lcd.print("MLT: ");
     }
-   
-    Serial.print(h);
-    Serial.print(":");  // And print the colon
-   
-    if (m < 10) {       // Add a zero, if necessary, as above
-        Serial.print(0);
-    }
-   
-    Serial.print(m);
-    Serial.print(":");  // And print the colon
-   
-    if (s < 10) {       // Add a zero, if necessary, as above
-        Serial.print(0);
-    }
-   
-    Serial.print(s);
+    
+    lcd.print(temp);
+    lcd.print(" ");
+    lcd.print((char) 223);
+    lcd.print("C");
+    printDots();
 }
