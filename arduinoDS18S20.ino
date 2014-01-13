@@ -1,13 +1,11 @@
-// DS18S20 temperature sensor
 #include <OneWire.h>
 #include <Wire.h>
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
 
 #define SENSOR_PIN  2
-
 #define SENSOR_HLT "10bab04c280b7"
-#define SENSOR_MLT ""              // add sensor address
+#define SENSOR_MLT "104bbc4d2805c"
 
 #define RED 0x1
 #define YELLOW 0x3
@@ -25,9 +23,7 @@ String sensor;
 String mode;
 
 void setup() {
-    Serial.begin(9600);
-    
-    // lcd
+    // initialize lcd
     lcd.begin(16, 2);
     
     lcd.print("Welkom in");
@@ -35,6 +31,8 @@ void setup() {
     lcd.print("Brouwzaal 1");
     delay(1000);
     lcd.clear();
+    
+    // show menu options, scrolled
 }
 
 void loop() {
@@ -89,7 +87,6 @@ void printTime() {
 
 float readTemperature() {
     byte i;
-    byte p = 0;
     byte data[12];
     byte addr[8];
     sensor = "";
@@ -114,9 +111,9 @@ float readTemperature() {
     }
 
     ds.write(0x44, 1);  
-    delay(750);
+    delay(800);
   
-    p = ds.reset();
+    ds.reset();
     ds.select(addr);    
     ds.write(0xBE);
 
@@ -136,19 +133,26 @@ float readTemperature() {
 void printTemperature() {
     float temp = readTemperature();
   
-    if (sensor == SENSOR_HLT) {
-        lcd.setCursor(0,0);
-        lcd.print("HLT: ");
-    } else if (sensor == SENSOR_MLT) {
-        lcd.setCursor(0,1);
-        lcd.print("MLT: ");
+    if (temp) {
+        if (sensor == SENSOR_HLT) {
+            lcd.setCursor(0, 0);
+            lcd.print("HLT: ");
+        } else if (sensor == SENSOR_MLT) {
+            lcd.setCursor(0, 1);
+            lcd.print("MLT: ");
+        } 
+        
+        lcd.print(temp);
+        lcd.print(" ");
+        lcd.print((char) 223);
+        lcd.print("C");
+        
+        if (temp >= 100) {
+            lcd.print(" ");
+        } else {
+            lcd.print("  "); 
+        }
+        
+        lcd.cursor();
     }
-    
-    lcd.print(temp);
-    lcd.print(" ");
-    lcd.print((char) 223);
-    lcd.print("C");
-    lcd.print(" ");
-    delay(100);
-    lcd.cursor();
 }
