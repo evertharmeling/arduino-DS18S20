@@ -30,7 +30,7 @@ String mode;
 float tempHLT = 0;
 float tempMLT = 0;
 elapsedMillis elapsedTime;
-
+boolean heatUp = true;
 unsigned int interval = 1000;
 
 /**
@@ -192,7 +192,7 @@ void prepareRelais(float temp) {
       
         // ensure we got the temperature of both sensor probes, so we can calculate a diff
         if (sensor == SENSOR_HLT && tempHLT != 0 && tempMLT != 0) {
-            handleRelais(60, temp);
+            handleRelais(60, tempHLT, tempMLT);
         }
     } else {
         Serial.println("Geen sensoren aangesloten...");
@@ -200,36 +200,45 @@ void prepareRelais(float temp) {
 }
 
 /** 
- *  Handles switching the relais, acting on temperature and temperature diff between HLT and MLT
+ *  Handles switching the relais, acting on temperature and temperature diff between the desired temperature and MLT temperature
  *
- *  @param float curTemp    Current temperature of the HLT sensor probe
- *  @param float tempDiff   Difference in temperature between HLT and MLT
+ *  @param float setTemp  The temperature to reach by the MLT
+ *  @param float tempHLT  Current temperature of the HLT sensor probe
+ *  @param float tempMLT  Current temperature of the MLT sensor probe
  */
-void handleRelais(int setTemp, float curTemp) {
-    float tempDiff = setTemp - curTemp;
-    Serial.print("Current temp: ");
-    Serial.println(curTemp);
+void handleRelais(float setTemp, float tempHLT, float tempMLT) {
+    float setTempDiff = setTemp - tempMLT;
+    float hysterese = 1.0;
+    
+    Serial.print("Current set temp: ");
+    Serial.println(setTemp);
+    Serial.print("Current temp HLT: ");
+    Serial.println(tempHLT);
+    Serial.print("Current temp MLT: ");
+    Serial.println(tempMLT);
     Serial.print("Temp diff: ");
-    Serial.println(tempDiff);
+    Serial.println(setTempDiff);
+    
+    if (tempMLT < (setTemp + hysterese)) {
+        heatUp = true;
+    } else if (tempMLT > (setTemp - hysterese)) {
+        heatUp = false;
+    }
   
-    if (curTemp < setTemp) {
-        Serial.println("Temp < " + String(setTemp));
-        
-        if (tempDiff > 1) {
+    if (heatUp) {
+        if ((setTempDiff + hysterese) > 0.5) {
             switchRelais(PIN_RELAIS_ONE, true);
-        } else {
+        } else if ((setTempDiff - hysterese) < 0.5) {
             switchRelais(PIN_RELAIS_ONE, false);
         }
-        if (tempDiff > 0.5) {
+        if ((setTempDiff + hysterese) > 0) {
             switchRelais(PIN_RELAIS_TWO, true);
-        } else {
+        } else if ((setTempDiff - hysterese) < 0) {
             switchRelais(PIN_RELAIS_TWO, false);
         }
         
         switchRelais(PIN_RELAIS_THREE, true);
-    }
-    else {
-        Serial.println("else");
+    } else {
         switchRelais(PIN_RELAIS_ONE, false);
         switchRelais(PIN_RELAIS_TWO, false);
         switchRelais(PIN_RELAIS_THREE, false);
@@ -268,6 +277,7 @@ void printTime() {
     lcd.print(h);
     lcd.print(":");     // And print the colon
    
+    m -= h * 60;
     if (m < 10) {       // Add a zero, if necessary, as above
         lcd.print(0);
     }
