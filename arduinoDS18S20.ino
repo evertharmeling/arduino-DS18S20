@@ -208,7 +208,7 @@ void prepareRelais(float temp) {
  *  @param float tempHLT  Current temperature of the HLT sensor probe
  *  @param float tempMLT  Current temperature of the MLT sensor probe
  */
-void handleRelais(float setTemp, float tempHLT, float tempMLT) {
+void handleRelais(float setTemp, float tempHLT, float tempMLT) { 
     float setTempHLT = setTemp + 10;
     float setTempDiff = setTemp - tempMLT;
     float hysterese = 0.5;
