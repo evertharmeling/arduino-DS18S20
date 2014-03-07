@@ -5,6 +5,7 @@
 #include <elapsedMillis.h>
 
 #define PIN_SENSOR       2
+#define PIN_RELAIS_PUMP  5
 #define PIN_RELAIS_ONE   6
 #define PIN_RELAIS_TWO   7
 #define PIN_RELAIS_THREE 8
@@ -31,6 +32,7 @@ float tempHLT = 0;
 float tempMLT = 0;
 elapsedMillis elapsedTime;
 boolean heatUp = true;
+boolean pump = true;
 unsigned int interval = 1000;
 
 /**
@@ -48,10 +50,13 @@ void setup() {
     delay(1000);
     lcd.clear();
     
+    Serial.println("Brouwen gestart");
+    
     // initialize Relais
-    pinMode(PIN_RELAIS_ONE, OUTPUT);
-    pinMode(PIN_RELAIS_TWO, OUTPUT);
+    pinMode(PIN_RELAIS_ONE,   OUTPUT);
+    pinMode(PIN_RELAIS_TWO,   OUTPUT);
     pinMode(PIN_RELAIS_THREE, OUTPUT);
+    pinMode(PIN_RELAIS_PUMP,  OUTPUT);
 }
 
 /**
@@ -73,13 +78,7 @@ void loop() {
     }
     
     float temp = readTemperature();
-    if (elapsedTime > interval) {
-
-        prepareRelais(temp);
-
-        // reset the counter to 0 so the counting starts over...
-	elapsedTime = 0;
-    }
+    prepareRelais(temp);
     
     // handle button change
     if (mode == "time") {
@@ -191,58 +190,53 @@ void prepareRelais(float temp) {
         }
       
         // ensure we got the temperature of both sensor probes, so we can calculate a diff
-        if (sensor == SENSOR_HLT && tempHLT != 0 && tempMLT != 0) {
-            handleRelais(60, tempHLT, tempMLT);
+        if (tempHLT != 0 && tempMLT != 0 && elapsedTime > interval) {
+            // set temperature for the maisch steps!
+            handleRelais(67, tempHLT, tempMLT);
+            // reset the counter to 0 so the counting starts over...
+	    elapsedTime = 0;
         }
-    } else {
-        Serial.println("Geen sensoren aangesloten...");
     }
 }
 
 /** 
- *  Handles switching the relais, acting on temperature and temperature diff between the desired temperature and MLT temperature
+ *  Handles switching the relais for heating up the HLT (by heaters) and MLT (by pumping wort through HLT spiral)
+ *  The temperature of the HLT will be increased with 20 degrees, so heating up the MLT is quicker. The only catch
+ *  is to not heat up the HLT too much at the last maisch step (the water will be used to rinse the MLT)
  *
  *  @param float setTemp  The temperature to reach by the MLT
  *  @param float tempHLT  Current temperature of the HLT sensor probe
  *  @param float tempMLT  Current temperature of the MLT sensor probe
  */
 void handleRelais(float setTemp, float tempHLT, float tempMLT) {
+    float setTempHLT = setTemp + 10;
     float setTempDiff = setTemp - tempMLT;
-    float hysterese = 1.0;
-    
-    Serial.print("Current set temp: ");
-    Serial.println(setTemp);
+    float hysterese = 0.5;
+
+    Serial.print("Current set temp HLT: ");
+    Serial.println(setTempHLT + hysterese);
     Serial.print("Current temp HLT: ");
     Serial.println(tempHLT);
+    Serial.print("Current set temp MLT: ");
+    Serial.println(setTemp + hysterese);
     Serial.print("Current temp MLT: ");
     Serial.println(tempMLT);
     Serial.print("Temp diff: ");
     Serial.println(setTempDiff);
-    
-    if (tempMLT < (setTemp + hysterese)) {
-        heatUp = true;
-    } else if (tempMLT > (setTemp - hysterese)) {
-        heatUp = false;
-    }
-  
-    if (heatUp) {
-        if ((setTempDiff + hysterese) > 0.5) {
-            switchRelais(PIN_RELAIS_ONE, true);
-        } else if ((setTempDiff - hysterese) < 0.5) {
-            switchRelais(PIN_RELAIS_ONE, false);
-        }
-        if ((setTempDiff + hysterese) > 0) {
-            switchRelais(PIN_RELAIS_TWO, true);
-        } else if ((setTempDiff - hysterese) < 0) {
-            switchRelais(PIN_RELAIS_TWO, false);
-        }
-        
+     
+    // Heat up the HLT
+    if (handleHysterese(tempHLT, setTempHLT, hysterese)) {
+        switchRelais(PIN_RELAIS_ONE, true);
+        switchRelais(PIN_RELAIS_TWO, true);
         switchRelais(PIN_RELAIS_THREE, true);
     } else {
         switchRelais(PIN_RELAIS_ONE, false);
         switchRelais(PIN_RELAIS_TWO, false);
         switchRelais(PIN_RELAIS_THREE, false);
     }
+    
+    // According to the setTemp heat up the MLT by turning on the pump
+    switchRelais(PIN_RELAIS_PUMP, handleHysterese(tempMLT, setTemp, hysterese));
 }
 
 /**
@@ -258,6 +252,22 @@ void switchRelais(int relais, boolean on) {
     } else {
         Serial.println("Set relais " + String(relais) + " OFF");
         digitalWrite(relais, HIGH);
+    }
+}
+
+/**
+ *  Uniform way of handling the hysterese check, to prevent switching the relais too fast on/off
+ *
+ *  @param float temp       Current temperature value
+ *  @param float setTemp    Desired temperature
+ *  @param float hysterese  The amount added / substracted to the setTemp
+ */
+boolean handleHysterese(float temp, float setTemp, float hysterese)
+{
+    if (temp < (setTemp + hysterese)) {
+        return true;
+    } else if (temp > (setTemp - hysterese)) {
+        return false;
     }
 }
 
