@@ -4,36 +4,38 @@
 #include <Adafruit_RGBLCDShield.h>
 #include <elapsedMillis.h>
 
-#define PIN_SENSOR       2
-#define PIN_RELAIS_PUMP  5
-#define PIN_RELAIS_ONE   6
-#define PIN_RELAIS_TWO   7
-#define PIN_RELAIS_THREE 8
-#define PIN_RELAIS_FOUR  9
+// Declaration pins
+#define PIN_SENSOR_TEMPERATURE  2
+#define PIN_RELAIS_PUMP         5
+#define PIN_RELAIS_ONE          6
+#define PIN_RELAIS_TWO          7
+#define PIN_RELAIS_THREE        8
+#define PIN_RELAIS_FOUR         9
 
+// Temperature probe addresses
 #define SENSOR_HLT "10bab04c280b7"
 #define SENSOR_MLT "104bbc4d2805c"
 
-#define RED 0x1
-#define YELLOW 0x3
-#define GREEN 0x2
-#define TEAL 0x6
-#define BLUE 0x4
-#define VIOLET 0x5
-#define WHITE 0x7
+// Define LCD colors
+#define RED     0x1
+#define GREEN   0x2
+#define YELLOW  0x3
+#define BLUE    0x4
+#define VIOLET  0x5
+#define TEAL    0x6
+#define WHITE   0x7
 
 // on pin 10 (a 2.2K resistor is necessary)
-OneWire ds(PIN_SENSOR);
+OneWire ds(PIN_SENSOR_TEMPERATURE);
 Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 
 String sensor;
 String mode;
-float tempHLT = 0;
-float tempMLT = 0;
 elapsedMillis elapsedTime;
-boolean heatUp = true;
-boolean pump = true;
-unsigned int interval = 1000;
+
+unsigned int interval  = 1000;
+float tempHLT          = 0;
+float tempMLT          = 0;
 
 /**
  *  Setup
@@ -225,15 +227,10 @@ void handleRelais(float setTemp, float tempHLT, float tempMLT) {
     Serial.println(setTempDiff);
      
     // Heat up the HLT
-    if (handleHysterese(tempHLT, setTempHLT, hysterese)) {
-        switchRelais(PIN_RELAIS_ONE, true);
-        switchRelais(PIN_RELAIS_TWO, true);
-        switchRelais(PIN_RELAIS_THREE, true);
-    } else {
-        switchRelais(PIN_RELAIS_ONE, false);
-        switchRelais(PIN_RELAIS_TWO, false);
-        switchRelais(PIN_RELAIS_THREE, false);
-    }
+    boolean heatUpHLT = handleHysterese(tempHLT, setTempHLT, hysterese);
+    switchRelais(PIN_RELAIS_ONE,   heatUpHLT);
+    switchRelais(PIN_RELAIS_TWO,   heatUpHLT);
+    switchRelais(PIN_RELAIS_THREE, heatUpHLT);
     
     // According to the setTemp heat up the MLT by turning on the pump
     switchRelais(PIN_RELAIS_PUMP, handleHysterese(tempMLT, setTemp, hysterese));
