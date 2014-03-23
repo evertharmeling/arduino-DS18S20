@@ -36,6 +36,8 @@ elapsedMillis elapsedTime;
 unsigned int interval  = 1000;
 float tempHLT          = 0;
 float tempMLT          = 0;
+float lastTemp         = 78;
+boolean heating        = true;
 
 /**
  *  Setup
@@ -93,6 +95,29 @@ void loop() {
 /*
  * ========================= FUNCTIONS =========================
  */
+ 
+/**
+ *  Handles the switching of the relais
+ *
+ *  @param float temp  The temperature in degrees Celsius
+ */
+void prepareRelais(float temp) {
+    if (sensor && temp) {
+        if (sensor == SENSOR_HLT) {
+            tempHLT = temp;
+        } else if (sensor == SENSOR_MLT) {
+            tempMLT = temp;
+        }
+      
+        // ensure we got the temperature of both sensor probes, so we can calculate a diff
+        if (tempHLT != 0 && tempMLT != 0 && elapsedTime > interval) {
+            // set temperature for the maisch steps!
+            handleRelais(78, tempHLT, tempMLT);
+            // reset the counter to 0 so the counting starts over...
+	    elapsedTime = 0;
+        }
+    }
+}
 
 /**
  *  Reads the temperature of the sensors, and stores these in `temp` variable and `sensor` variable
@@ -178,29 +203,6 @@ void printTemperature(float temp) {
     }
 }
 
-/**
- *  Handles the switching of the relais
- *
- *  @param float temp  The temperature in degrees Celsius
- */
-void prepareRelais(float temp) {
-    if (sensor && temp) {
-        if (sensor == SENSOR_HLT) {
-            tempHLT = temp;
-        } else if (sensor == SENSOR_MLT) {
-            tempMLT = temp;
-        }
-      
-        // ensure we got the temperature of both sensor probes, so we can calculate a diff
-        if (tempHLT != 0 && tempMLT != 0 && elapsedTime > interval) {
-            // set temperature for the maisch steps!
-            handleRelais(67, tempHLT, tempMLT);
-            // reset the counter to 0 so the counting starts over...
-	    elapsedTime = 0;
-        }
-    }
-}
-
 /** 
  *  Handles switching the relais for heating up the HLT (by heaters) and MLT (by pumping wort through HLT spiral)
  *  The temperature of the HLT will be increased with 20 degrees, so heating up the MLT is quicker. The only catch
@@ -211,11 +213,13 @@ void prepareRelais(float temp) {
  *  @param float tempMLT  Current temperature of the MLT sensor probe
  */
 void handleRelais(float setTemp, float tempHLT, float tempMLT) { 
-    float setTempHLT = setTemp + 10;
+    float setTempHLT = setTemp + 20;
     float setTempDiff = setTemp - tempMLT;
     float hysterese = 0.5;
 
     Serial.print("Current set temp HLT: ");
+    Serial.print(lastTemp);
+    Serial.print(" or ");
     Serial.println(setTempHLT + hysterese);
     Serial.print("Current temp HLT: ");
     Serial.println(tempHLT);
@@ -227,10 +231,14 @@ void handleRelais(float setTemp, float tempHLT, float tempMLT) {
     Serial.println(setTempDiff);
      
     // Heat up the HLT
-    boolean heatUpHLT = handleHysterese(tempHLT, setTempHLT, hysterese);
-    switchRelais(PIN_RELAIS_ONE,   heatUpHLT);
-    switchRelais(PIN_RELAIS_TWO,   heatUpHLT);
-    switchRelais(PIN_RELAIS_THREE, heatUpHLT);
+    if (tempHLT > lastTemp) {
+        boolean heatUpHLT = false;
+    } else {
+        boolean heatUpHLT = handleHysterese(tempHLT, setTempHLT, hysterese);
+        switchRelais(PIN_RELAIS_ONE,   heatUpHLT);
+        switchRelais(PIN_RELAIS_TWO,   heatUpHLT);
+        switchRelais(PIN_RELAIS_THREE, heatUpHLT);
+    }
     
     // According to the setTemp heat up the MLT by turning on the pump
     switchRelais(PIN_RELAIS_PUMP, handleHysterese(tempMLT, setTemp, hysterese));
@@ -261,11 +269,21 @@ void switchRelais(int relais, boolean on) {
  */
 boolean handleHysterese(float temp, float setTemp, float hysterese)
 {
-    if (temp < (setTemp + hysterese)) {
-        return true;
-    } else if (temp > (setTemp - hysterese)) {
-        return false;
+    float top = setTemp + hysterese;
+    float bottom = setTemp - hysterese;
+
+    if (temp >= bottom && temp <= top) {
+        // hysterese zone
+        Serial.println("Hysteresing");
+    } else if (temp < bottom) {
+        Serial.println("We are heating");
+        heating = true;
+    } else if (temp > top) {
+        Serial.println("Temperature reached wait...");
+        heating = false;
     }
+    
+    return heating;
 }
 
 /**
