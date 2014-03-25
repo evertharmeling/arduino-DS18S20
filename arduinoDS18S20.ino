@@ -15,6 +15,8 @@
 // Temperature probe addresses
 #define SENSOR_HLT "10bab04c280b7"
 #define SENSOR_MLT "104bbc4d2805c"
+#define SENSOR_BLT "103d1325280a6"
+#define SENSOR_EXT "1097e4242804d"
 
 // Define LCD colors
 #define RED     0x1
@@ -36,8 +38,12 @@ elapsedMillis elapsedTime;
 unsigned int interval  = 1000;
 float tempHLT          = 0;
 float tempMLT          = 0;
+float tempBLT          = 0;
+float tempEXT          = 0;
 float lastTemp         = 78;
-boolean heating        = true;
+float maischTemp       = 25;
+boolean heatUpHLT      = true;
+boolean heatUpMLT      = true;
 
 /**
  *  Setup
@@ -107,12 +113,16 @@ void prepareRelais(float temp) {
             tempHLT = temp;
         } else if (sensor == SENSOR_MLT) {
             tempMLT = temp;
+        } else if (sensor == SENSOR_BLT) {
+            tempBLT = temp;
+        } else if (sensor == SENSOR_EXT) {
+            tempEXT = temp;
         }
       
         // ensure we got the temperature of both sensor probes, so we can calculate a diff
         if (tempHLT != 0 && tempMLT != 0 && elapsedTime > interval) {
             // set temperature for the maisch steps!
-            handleRelais(78, tempHLT, tempMLT);
+            handleRelais(maischTemp, tempHLT, tempMLT);
             // reset the counter to 0 so the counting starts over...
 	    elapsedTime = 0;
         }
@@ -232,16 +242,17 @@ void handleRelais(float setTemp, float tempHLT, float tempMLT) {
      
     // Heat up the HLT
     if (tempHLT > lastTemp) {
-        boolean heatUpHLT = false;
+        heatUpHLT = false;
     } else {
-        boolean heatUpHLT = handleHysterese(tempHLT, setTempHLT, hysterese);
+        heatUpHLT = handleHysterese(tempHLT, setTempHLT, heatUpHLT, hysterese);
         switchRelais(PIN_RELAIS_ONE,   heatUpHLT);
         switchRelais(PIN_RELAIS_TWO,   heatUpHLT);
         switchRelais(PIN_RELAIS_THREE, heatUpHLT);
     }
     
     // According to the setTemp heat up the MLT by turning on the pump
-    switchRelais(PIN_RELAIS_PUMP, handleHysterese(tempMLT, setTemp, hysterese));
+    heatUpMLT = handleHysterese(tempMLT, setTemp, heatUpMLT, hysterese);
+    switchRelais(PIN_RELAIS_PUMP, heatUpMLT);
 }
 
 /**
@@ -267,13 +278,13 @@ void switchRelais(int relais, boolean on) {
  *  @param float setTemp    Desired temperature
  *  @param float hysterese  The amount added / substracted to the setTemp
  */
-boolean handleHysterese(float temp, float setTemp, float hysterese)
+boolean handleHysterese(float temp, float setTemp, boolean heating, float hysterese)
 {
     float top = setTemp + hysterese;
     float bottom = setTemp - hysterese;
 
     if (temp >= bottom && temp <= top) {
-        // hysterese zone
+        // hysterese zone, don't change the heating variable
         Serial.println("Hysteresing");
     } else if (temp < bottom) {
         Serial.println("We are heating");
@@ -282,7 +293,7 @@ boolean handleHysterese(float temp, float setTemp, float hysterese)
         Serial.println("Temperature reached wait...");
         heating = false;
     }
-    
+
     return heating;
 }
 
