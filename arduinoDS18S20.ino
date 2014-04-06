@@ -15,6 +15,9 @@
 // Temperature probe addresses
 #define SENSOR_HLT "10bab04c280b7"
 #define SENSOR_MLT "104bbc4d2805c"
+//#define SENSOR_HLT "103d1325280a6"
+//#define SENSOR_MLT "1097e4242804d"
+
 #define SENSOR_BLT "103d1325280a6"
 #define SENSOR_EXT "1097e4242804d"
 
@@ -33,17 +36,22 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 
 String sensor;
 String mode;
-elapsedMillis elapsedTime;
+elapsedMillis loopTime;
+elapsedMillis stepTime;
 
 unsigned int interval  = 1000;
 float tempHLT          = 0;
 float tempMLT          = 0;
 float tempBLT          = 0;
 float tempEXT          = 0;
-float lastTemp         = 78;
-float maischTemp       = 25;
 boolean heatUpHLT      = true;
 boolean heatUpMLT      = true;
+
+boolean firstMaischPeriod  = false;
+int currentMaischStep      = 0;
+int maischTimes[]          = { 10, 45, 30, 1 };
+int maischTemperatures[]   = { 27, 62, 73, 78 };
+float lastTemp             = 78;
 
 /**
  *  Setup
@@ -92,7 +100,7 @@ void loop() {
     
     // handle button change
     if (mode == "time") {
-        printTime();
+        lcdElapsedTime();
     } else {
         printTemperature(temp);
     }
@@ -119,12 +127,38 @@ void prepareRelais(float temp) {
             tempEXT = temp;
         }
       
-        // ensure we got the temperature of both sensor probes, so we can calculate a diff
-        if (tempHLT != 0 && tempMLT != 0 && elapsedTime > interval) {
+        // ensure we got the temperature of the HLT and MLT sensor probes, so we can calculate a diff
+        if (tempHLT != 0 && tempMLT != 0 && loopTime > interval) {
+          
+            int currentMaischTime = maischTimes[currentMaischStep];
+            int elapsedMinutesCurrentStep = stepTime / 1000 / 60;
+            
+            // initial check, to start first period when the temperature is reached
+            if (tempMLT >= maischTemperatures[currentMaischStep] && !firstMaischPeriod) {
+                stepTime = 0;
+                firstMaischPeriod = true;
+            }
+            
+            // when we hit the temperature start counting the current period
+            if (tempMLT >= maischTemperatures[currentMaischStep] && elapsedMinutesCurrentStep == currentMaischTime) {
+                currentMaischStep++;
+                stepTime = 0;
+            }
+            
+            Serial.println("---------------------------------");
+            Serial.print("Current Maisch Time: ");
+            Serial.println(currentMaischTime);
+            Serial.print("Current Maisch Step: ");
+            Serial.println(currentMaischStep);
+            Serial.print("Time elapsed: ");
+            serialElapsedTime();
+            Serial.print("Time elapsed current maisch step: ");
+            serialStepTime();
+          
             // set temperature for the maisch steps!
-            handleRelais(maischTemp, tempHLT, tempMLT);
+            handleRelais(tempHLT, tempMLT);
             // reset the counter to 0 so the counting starts over...
-	    elapsedTime = 0;
+	    loopTime = 0;
         }
     }
 }
@@ -204,7 +238,7 @@ void printTemperature(float temp) {
         }
         
         lcd.cursor();
-    } else if (elapsedTime > interval) {
+    } else if (loopTime > interval) {
         lcd.setCursor(0, 0);
         lcd.print("Geen sensoren");
         lcd.setCursor(0, 1);
@@ -222,14 +256,15 @@ void printTemperature(float temp) {
  *  @param float tempHLT  Current temperature of the HLT sensor probe
  *  @param float tempMLT  Current temperature of the MLT sensor probe
  */
-void handleRelais(float setTemp, float tempHLT, float tempMLT) { 
+void handleRelais(float tempHLT, float tempMLT) { 
+  
+    float setTemp = maischTemperatures[currentMaischStep];
+  
     float setTempHLT = setTemp + 20;
     float setTempDiff = setTemp - tempMLT;
     float hysterese = 0.5;
 
     Serial.print("Current set temp HLT: ");
-    Serial.print(lastTemp);
-    Serial.print(" or ");
     Serial.println(setTempHLT + hysterese);
     Serial.print("Current temp HLT: ");
     Serial.println(tempHLT);
@@ -239,6 +274,7 @@ void handleRelais(float setTemp, float tempHLT, float tempMLT) {
     Serial.println(tempMLT);
     Serial.print("Temp diff: ");
     Serial.println(setTempDiff);
+    Serial.println("=================================");
      
     // Heat up the HLT
     if (tempHLT > lastTemp) {
@@ -298,33 +334,83 @@ boolean handleHysterese(float temp, float setTemp, boolean heating, float hyster
 }
 
 /**
- *  Prints the elapsed time
+ *  Prints the elapsed time to Serial
  */
-void printTime() {
-    int s = millis() / 1000;
+void printTime(float time, String type) {
+    int s = time / 1000;
     int m = s / 60;
     int h = m / 60;
-    lcd.setCursor(8,1);
-   
-    if (h < 10) {       // Add a zero, if necessary
-        lcd.print(0);
+    
+    if (type == 'lcd') {
+        lcd.setCursor(8,1);
     }
    
-    lcd.print(h);
-    lcd.print(":");     // And print the colon
+    if (h < 10) {       // Add a zero, if necessary
+        if (type == 'serial') {
+            Serial.print("0");
+        } else if (type == 'lcd') {
+            lcd.print(0);
+        }   
+    }
+   
+    if (type == 'serial') {
+        Serial.print(h);
+        Serial.print(":");     // And print the colon
+    } else if (type == 'lcd') {
+        lcd.print(h);
+        lcd.print(":");     // And print the colon
+    }
    
     m -= h * 60;
     if (m < 10) {       // Add a zero, if necessary, as above
-        lcd.print(0);
+        if (type == 'serial') {
+            Serial.print("0");
+        } else if (type == 'lcd') {
+            lcd.print(0);
+        }
     }
    
-    lcd.print(m);
-    lcd.print(":");     // And print the colon
+    if (type == 'serial') {
+        Serial.print(m);
+        Serial.print(":");     // And print the colon
+    } else if (type == 'lcd') {
+        lcd.print(m);
+        lcd.print(":");     // And print the colon
+    }
    
     s -= m * 60;
     if (s < 10) {       // Add a zero, if necessary, as above
-        lcd.print(0);
+        if (type == 'serial') {
+            Serial.print("0");
+        } else if (type == 'lcd') {
+            lcd.print(0);
+        }
     }
    
-    lcd.print(s);
+    if (type == 'serial') {
+        Serial.print(s);
+    } else if (type == 'lcd') {
+        lcd.print(s);
+    }
+}
+
+/**
+ *  Prints the elapsed time to LCD
+ */
+void lcdElapsedTime() {
+    printTime(millis(), 'lcd');
+}
+
+/**
+ *  Prints the elapsed time to Serial
+ */
+void serialElapsedTime() {
+    serialTime(millis(), 'serial');
+}
+
+/**
+ *  Prints the step time to Serial
+ */
+void serialStepTime() {
+    serialTime(stepTime, 'serial');
 }
