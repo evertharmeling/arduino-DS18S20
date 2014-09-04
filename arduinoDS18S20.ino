@@ -96,13 +96,13 @@ void loop() {
 
     // handle buttons
     if (buttons) {
-        if (buttons && BUTTON_UP) {
+        if (buttons & BUTTON_UP) {
             mode = MODE_TIME;
         }
-        if (buttons && BUTTON_LEFT) {
+        if (buttons & BUTTON_LEFT) {
             mode = MODE_HLT_MLT;
         }
-        if (buttons && BUTTON_RIGHT) {
+        if (buttons & BUTTON_RIGHT) {
             mode = MODE_BLT_EXT;
         }
         
