@@ -115,7 +115,7 @@ void loop() {
     // handle button change
     if (mode == MODE_TIME) {
         lcdElapsedTime();
-    } else if (mode == MODE_HLT_MLT || mode == MODE_BLT_EXT) {
+    } else {
         printTemperature(temp, mode);        
     }
 }
